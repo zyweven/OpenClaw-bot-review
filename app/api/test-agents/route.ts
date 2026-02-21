@@ -37,7 +37,7 @@ async function testModel(provider: any, modelId: string): Promise<{ ok: boolean;
         method: "POST",
         headers,
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout(100000),
       });
 
       const elapsed = Date.now() - startTime;
@@ -61,7 +61,7 @@ async function testModel(provider: any, modelId: string): Promise<{ ok: boolean;
         method: "POST",
         headers,
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout(100000),
       });
 
       const elapsed = Date.now() - startTime;
