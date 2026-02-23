@@ -33,10 +33,51 @@ function saveAlertConfig(config: AlertConfig): void {
   fs.writeFileSync(ALERTS_CONFIG_PATH, JSON.stringify(config, null, 2));
 }
 
-// 模拟发送告警消息到 agent
+function getGatewayConfig() {
+  const configPath = path.join(OPENCLAW_HOME, "openclaw.json");
+  try {
+    const raw = fs.readFileSync(configPath, "utf-8");
+    const config = JSON.parse(raw);
+    return {
+      port: config.gateway?.port || 18789,
+      token: config.gateway?.auth?.token || "",
+    };
+  } catch {
+    return { port: 18789, token: "" };
+  }
+}
+
+// 发送告警消息到 agent
 async function sendAlert(agentId: string, message: string) {
-  console.log(`[ALERT] To ${agentId}: ${message}`);
-  return { sent: true, message };
+  const gateway = getGatewayConfig();
+  const sessionKey = `agent:${agentId}:main`;
+  
+  try {
+    const resp = await fetch(`http://127.0.0.1:${gateway.port}/v1/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${gateway.token}`,
+      },
+      body: JSON.stringify({
+        session: sessionKey,
+        messages: [
+          { role: "user", content: message }
+        ],
+      }),
+    });
+    
+    if (resp.ok) {
+      console.log(`[ALERT] Sent to ${agentId}: ${message}`);
+      return { sent: true, message };
+    } else {
+      console.error(`[ALERT] Failed to send to ${agentId}:`, resp.statusText);
+      return { sent: false, error: resp.statusText };
+    }
+  } catch (err: any) {
+    console.error(`[ALERT] Error sending to ${agentId}:`, err.message);
+    return { sent: false, error: err.message };
+  }
 }
 
 // 检查模型是否可用
