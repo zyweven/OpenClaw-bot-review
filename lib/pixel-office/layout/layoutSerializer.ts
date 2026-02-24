@@ -164,14 +164,16 @@ export function layoutToSeats(furniture: PlacedFurniture[]): Map<string, Seat> {
 
         // Determine facing direction:
         // 1) Chair orientation takes priority
-        // 2) Adjacent desk direction
+        // 2) Adjacent desk direction (use rounded coords for grid lookup)
         // 3) Default forward (DOWN)
         let facingDir: Direction = Direction.DOWN
+        const roundedCol = Math.round(tileCol)
+        const roundedRow = Math.round(tileRow)
         if (entry.orientation) {
           facingDir = orientationToFacing(entry.orientation)
         } else {
           for (const d of dirs) {
-            if (deskTiles.has(`${tileCol + d.dc},${tileRow + d.dr}`)) {
+            if (deskTiles.has(`${roundedCol + d.dc},${roundedRow + d.dr}`)) {
               facingDir = d.facing
               break
             }
@@ -199,7 +201,7 @@ export function layoutToSeats(furniture: PlacedFurniture[]): Map<string, Seat> {
 export function getSeatTiles(seats: Map<string, Seat>): Set<string> {
   const tiles = new Set<string>()
   for (const seat of seats.values()) {
-    tiles.add(`${seat.seatCol},${seat.seatRow}`)
+    tiles.add(`${Math.round(seat.seatCol)},${Math.round(seat.seatRow)}`)
   }
   return tiles
 }
@@ -273,20 +275,23 @@ export function createDefaultLayout(): OfficeLayout {
   }
 
   const furniture: PlacedFurniture[] = [
-    // ── Left work room ──
-    { uid: 'desk-l1', type: FurnitureType.DESK, col: 3, row: 3 },
-    { uid: 'chair-l1-top', type: FurnitureType.CHAIR, col: 3, row: 2 },
-    { uid: 'chair-l1-bottom', type: FurnitureType.CHAIR, col: 4, row: 5 },
-    { uid: 'chair-l1-left', type: FurnitureType.CHAIR, col: 2, row: 4 },
-    { uid: 'chair-l1-right', type: FurnitureType.CHAIR, col: 5, row: 3 },
-    { uid: 'desk-l2', type: FurnitureType.TABLE_WOOD_SM_VERTICAL, col: 8, row: 3 },
-    { uid: 'chair-l2', type: FurnitureType.CHAIR, col: 7, row: 3 },
-    { uid: 'chair-l2b', type: FurnitureType.CHAIR, col: 8, row: 5 },
+    // ── Left work room — 4 horizontal desks in 2×2 grid, each with a chair ──
+    { uid: 'desk-l1', type: FurnitureType.TABLE_WOOD_SM_HORIZONTAL, col: 3, row: 3 },
+    { uid: 'chair-l1', type: FurnitureType.BENCH, col: 3.5, row: 4 },
+    { uid: 'desk-l2', type: FurnitureType.TABLE_WOOD_SM_HORIZONTAL, col: 6, row: 3 },
+    { uid: 'chair-l2', type: FurnitureType.BENCH, col: 6.5, row: 4 },
+    { uid: 'desk-l3', type: FurnitureType.TABLE_WOOD_SM_HORIZONTAL, col: 3, row: 6 },
+    { uid: 'chair-l3', type: FurnitureType.BENCH, col: 3.5, row: 7 },
+    { uid: 'desk-l4', type: FurnitureType.TABLE_WOOD_SM_HORIZONTAL, col: 6, row: 6 },
+    { uid: 'chair-l4', type: FurnitureType.BENCH, col: 6.5, row: 7 },
     { uid: 'bookshelf-l', type: FurnitureType.BOOKSHELF, col: 1, row: 5 },
     { uid: 'plant-l1', type: FurnitureType.PLANT, col: 1, row: 1 },
     { uid: 'plant-l2', type: FurnitureType.PLANT_SMALL, col: 9, row: 1 },
     { uid: 'lamp-l', type: FurnitureType.LAMP, col: 1, row: 3 },
-    { uid: 'pc-l', type: FurnitureType.PC, col: 4, row: 3 },
+    { uid: 'pc-l1', type: FurnitureType.PC, col: 3.5, row: 3 },
+    { uid: 'pc-l2', type: FurnitureType.PC, col: 6.5, row: 3 },
+    { uid: 'pc-l3', type: FurnitureType.PC, col: 3.5, row: 6 },
+    { uid: 'pc-l4', type: FurnitureType.PC, col: 6.5, row: 6 },
 
     // ── Right work room ──
     { uid: 'desk-r1', type: FurnitureType.DESK, col: 13, row: 3 },

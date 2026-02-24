@@ -14,6 +14,10 @@ import {
   SEAT_REST_MAX_SEC,
 } from '../constants'
 
+/** Round seat coords to integer for grid-based pathfinding (seats may be at half-tile positions) */
+function seatGridCol(seat: Seat): number { return Math.round(seat.seatCol) }
+function seatGridRow(seat: Seat): number { return Math.round(seat.seatRow) }
+
 /** Tools that show reading animation instead of typing */
 const READING_TOOLS = new Set(['Read', 'Grep', 'Glob', 'WebFetch', 'WebSearch'])
 
@@ -49,6 +53,8 @@ export function createCharacter(
 ): Character {
   const col = seat ? seat.seatCol : 1
   const row = seat ? seat.seatRow : 1
+  const gridCol = Math.round(col)
+  const gridRow = Math.round(row)
   const center = tileCenter(col, row)
   return {
     id,
@@ -56,8 +62,8 @@ export function createCharacter(
     dir: seat ? seat.facingDir : Direction.DOWN,
     x: center.x,
     y: center.y,
-    tileCol: col,
-    tileRow: row,
+    tileCol: gridCol,
+    tileRow: gridRow,
     path: [],
     moveProgress: 0,
     currentTool: null,
@@ -130,7 +136,7 @@ export function updateCharacter(
         }
         const seat = seats.get(ch.seatId)
         if (seat) {
-          const path = findPath(ch.tileCol, ch.tileRow, seat.seatCol, seat.seatRow, tileMap, blockedTiles)
+          const path = findPath(ch.tileCol, ch.tileRow, seatGridCol(seat), seatGridRow(seat), tileMap, blockedTiles)
           if (path.length > 0) {
             ch.path = path
             ch.moveProgress = 0
@@ -154,7 +160,7 @@ export function updateCharacter(
         if (ch.wanderCount >= ch.wanderLimit && ch.seatId) {
           const seat = seats.get(ch.seatId)
           if (seat) {
-            const path = findPath(ch.tileCol, ch.tileRow, seat.seatCol, seat.seatRow, tileMap, blockedTiles)
+            const path = findPath(ch.tileCol, ch.tileRow, seatGridCol(seat), seatGridRow(seat), tileMap, blockedTiles)
             if (path.length > 0) {
               ch.path = path
               ch.moveProgress = 0
@@ -201,7 +207,7 @@ export function updateCharacter(
             ch.state = CharacterState.TYPE
           } else {
             const seat = seats.get(ch.seatId)
-            if (seat && ch.tileCol === seat.seatCol && ch.tileRow === seat.seatRow) {
+            if (seat && ch.tileCol === seatGridCol(seat) && ch.tileRow === seatGridRow(seat)) {
               ch.state = CharacterState.TYPE
               ch.dir = seat.facingDir
             } else {
@@ -212,7 +218,7 @@ export function updateCharacter(
           // Check if arrived at assigned seat — sit down for a rest before wandering again
           if (ch.seatId) {
             const seat = seats.get(ch.seatId)
-            if (seat && ch.tileCol === seat.seatCol && ch.tileRow === seat.seatRow) {
+            if (seat && ch.tileCol === seatGridCol(seat) && ch.tileRow === seatGridRow(seat)) {
               ch.state = CharacterState.TYPE
               ch.dir = seat.facingDir
               // seatTimer < 0 is a sentinel from setAgentActive(false) meaning
@@ -264,8 +270,8 @@ export function updateCharacter(
         const seat = seats.get(ch.seatId)
         if (seat) {
           const lastStep = ch.path[ch.path.length - 1]
-          if (!lastStep || lastStep.col !== seat.seatCol || lastStep.row !== seat.seatRow) {
-            const newPath = findPath(ch.tileCol, ch.tileRow, seat.seatCol, seat.seatRow, tileMap, blockedTiles)
+          if (!lastStep || lastStep.col !== seatGridCol(seat) || lastStep.row !== seatGridRow(seat)) {
+            const newPath = findPath(ch.tileCol, ch.tileRow, seatGridCol(seat), seatGridRow(seat), tileMap, blockedTiles)
             if (newPath.length > 0) {
               ch.path = newPath
               ch.moveProgress = 0

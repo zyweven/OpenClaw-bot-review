@@ -11,7 +11,7 @@ import {
   LAMP_SPRITE,
 } from '../sprites/spriteData'
 import {
-  TS_TABLE_WOOD_SM_VERTICAL,
+  TS_TABLE_WOOD_SM_VERTICAL, TS_TABLE_WOOD_SM_HORIZONTAL,
   TS_CHAIR_CUSHION, TS_CHAIR_SPINNING, TS_BENCH,
   TS_WATER_COOLER, TS_FRIDGE, TS_DECO_3,
   TS_CLOCK, TS_LIBRARY_GRAY_FULL, TS_PLANT_SMALL,
@@ -58,6 +58,7 @@ export const FURNITURE_CATALOG: CatalogEntryWithCategory[] = [
 
   // ── Tileset — Desks ──
   { type: FurnitureType.TABLE_WOOD_SM_VERTICAL, label: 'Wood Table Vertical', footprintW: 1, footprintH: 2, sprite: TS_TABLE_WOOD_SM_VERTICAL, isDesk: true, category: 'desks' },
+  { type: FurnitureType.TABLE_WOOD_SM_HORIZONTAL, label: 'Wood Table Horizontal', footprintW: 2, footprintH: 1, sprite: TS_TABLE_WOOD_SM_HORIZONTAL, isDesk: true, category: 'desks' },
 
   // ── Tileset — Chairs ──
   { type: FurnitureType.CHAIR_CUSHION,  label: 'Cushioned Chair', footprintW: 4, footprintH: 1, sprite: TS_CHAIR_CUSHION,  isDesk: false, category: 'chairs' },

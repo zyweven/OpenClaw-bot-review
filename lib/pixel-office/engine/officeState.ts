@@ -87,9 +87,9 @@ export class OfficeState {
         const seat = this.seats.get(ch.seatId)!
         if (!seat.assigned) {
           seat.assigned = true
-          // Snap character to seat position
-          ch.tileCol = seat.seatCol
-          ch.tileRow = seat.seatRow
+          // Snap character to seat position (tileCol/Row rounded for pathfinding, x/y fractional for visual)
+          ch.tileCol = Math.round(seat.seatCol)
+          ch.tileRow = Math.round(seat.seatRow)
           const cx = seat.seatCol * TILE_SIZE + TILE_SIZE / 2
           const cy = seat.seatRow * TILE_SIZE + TILE_SIZE / 2
           ch.x = cx
@@ -109,8 +109,8 @@ export class OfficeState {
         this.seats.get(seatId)!.assigned = true
         ch.seatId = seatId
         const seat = this.seats.get(seatId)!
-        ch.tileCol = seat.seatCol
-        ch.tileRow = seat.seatRow
+        ch.tileCol = Math.round(seat.seatCol)
+        ch.tileRow = Math.round(seat.seatRow)
         ch.x = seat.seatCol * TILE_SIZE + TILE_SIZE / 2
         ch.y = seat.seatRow * TILE_SIZE + TILE_SIZE / 2
         ch.dir = seat.facingDir
@@ -147,7 +147,7 @@ export class OfficeState {
     if (!ch.seatId) return null
     const seat = this.seats.get(ch.seatId)
     if (!seat) return null
-    return `${seat.seatCol},${seat.seatRow}`
+    return `${Math.round(seat.seatCol)},${Math.round(seat.seatRow)}`
   }
 
   /** Temporarily unblock a character's own seat, run fn, then re-block */
@@ -265,7 +265,7 @@ export class OfficeState {
   /** Find seat uid at a given tile position, or null */
   getSeatAtTile(col: number, row: number): string | null {
     for (const [uid, seat] of this.seats) {
-      if (seat.seatCol === col && seat.seatRow === row) return uid
+      if (Math.round(seat.seatCol) === col && Math.round(seat.seatRow) === row) return uid
     }
     return null
   }
@@ -286,7 +286,7 @@ export class OfficeState {
     ch.seatId = seatId
     // Pathfind to new seat (unblock own seat tile for this query)
     const path = this.withOwnSeatUnblocked(ch, () =>
-      findPath(ch.tileCol, ch.tileRow, seat.seatCol, seat.seatRow, this.tileMap, this.blockedTiles)
+      findPath(ch.tileCol, ch.tileRow, Math.round(seat.seatCol), Math.round(seat.seatRow), this.tileMap, this.blockedTiles)
     )
     if (path.length > 0) {
       ch.path = path
@@ -313,7 +313,7 @@ export class OfficeState {
     const seat = this.seats.get(ch.seatId)
     if (!seat) return
     const path = this.withOwnSeatUnblocked(ch, () =>
-      findPath(ch.tileCol, ch.tileRow, seat.seatCol, seat.seatRow, this.tileMap, this.blockedTiles)
+      findPath(ch.tileCol, ch.tileRow, Math.round(seat.seatCol), Math.round(seat.seatRow), this.tileMap, this.blockedTiles)
     )
     if (path.length > 0) {
       ch.path = path

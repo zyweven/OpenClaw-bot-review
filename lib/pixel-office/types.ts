@@ -91,6 +91,7 @@ export const FurnitureType = {
   LAMP: 'lamp',
   // Tileset — Desks
   TABLE_WOOD_SM_VERTICAL: 'ts_table_wood_sm_vertical',
+  TABLE_WOOD_SM_HORIZONTAL: 'ts_table_wood_sm_horizontal',
   // Tileset — Chairs
   CHAIR_CUSHION: 'ts_chair_cushion',
   CHAIR_SPINNING: 'ts_chair_spinning',

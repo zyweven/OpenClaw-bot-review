@@ -43,6 +43,24 @@ export const TS_TABLE_WOOD_SM_VERTICAL: SpriteData = [
   [_,_,_,'#391624','#391624','#391624','#391624','#391624','#391624','#391624','#391624','#391624','#391624',_,_,_],
 ]
 
+/** Transpose a sprite (rotate 90° clockwise) */
+function transposeSprite(sprite: SpriteData): SpriteData {
+  const rows = sprite.length
+  const cols = sprite[0].length
+  const result: SpriteData = []
+  for (let c = 0; c < cols; c++) {
+    const newRow: string[] = []
+    for (let r = rows - 1; r >= 0; r--) {
+      newRow.push(sprite[r][c])
+    }
+    result.push(newRow)
+  }
+  return result
+}
+
+/** Small Wood Table – Horizontal (32×16px, footprint 2×1) */
+export const TS_TABLE_WOOD_SM_HORIZONTAL: SpriteData = transposeSprite(TS_TABLE_WOOD_SM_VERTICAL)
+
 /** Cushioned Chair (64x16px) */
 export const TS_CHAIR_CUSHION: SpriteData = [
   [_,_,_,'#894666','#894666','#894666','#894666','#894666','#894666','#894666','#894666','#894666','#894666',_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,'#894666','#894666',_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,'#894666','#894666',_,_,_],
