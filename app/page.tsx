@@ -194,7 +194,7 @@ function PlatformBadge({ platform, agentId, gatewayPort, gatewayToken, gatewayHo
     ? "https://cdn.simpleicons.org/whatsapp/25D366"
     : "https://cdn.simpleicons.org/discord/5865F2";
   const logoFallbackSrc = pName === "feishu"
-    ? "/assets/platform-logos/feishu.svg"
+    ? "/assets/platform-logos/feishu-favicon.png?v=1"
     : pName === "telegram"
     ? "/assets/platform-logos/telegram.svg"
     : pName === "whatsapp"
