@@ -433,47 +433,45 @@ export default function PixelOfficePage() {
           const cid = agentIdMapRef.current.get(a.agentId)
           if (typeof cid === 'number') workingCharIds.add(cid)
         }
-        if (!isMobileViewport) {
-          for (const ch of office.getCharacters()) {
-            if (ch.photoComments.length === 0) continue
-            const anchorX = ox + ch.x * zoom
-            const anchorY = containerTop + oy + (ch.y - 24) * zoom
-            const totalDist = anchorY + 20
-            for (let i = 0; i < ch.photoComments.length; i++) {
-              const pc = ch.photoComments[i]
-              const progress = pc.age / lifetime
-              let alpha = 1.0
-              if (pc.age < 0.3) alpha = pc.age / 0.3
-              if (progress > 0.6) alpha = (1 - progress) / 0.4
-              const floatY = progress * totalDist
-              items.push({
-                key: `${ch.id}-${i}-${pc.text}`,
-                text: pc.text,
-                x: anchorX + pc.x * zoom,
-                y: anchorY - floatY,
-                opacity: Math.max(0, alpha * 0.95),
-              })
-            }
+        for (const ch of office.getCharacters()) {
+          if (ch.photoComments.length === 0) continue
+          const anchorX = ox + ch.x * zoom
+          const anchorY = containerTop + oy + (ch.y - 24) * zoom
+          const totalDist = anchorY + 20
+          for (let i = 0; i < ch.photoComments.length; i++) {
+            const pc = ch.photoComments[i]
+            const progress = pc.age / lifetime
+            let alpha = 1.0
+            if (pc.age < 0.3) alpha = pc.age / 0.3
+            if (progress > 0.6) alpha = (1 - progress) / 0.4
+            const floatY = progress * totalDist
+            items.push({
+              key: `${ch.id}-${i}-${pc.text}`,
+              text: pc.text,
+              x: anchorX + pc.x * zoom,
+              y: anchorY - floatY,
+              opacity: Math.max(0, alpha * 0.95),
+            })
           }
-          for (const ch of office.getCharacters()) {
-            if (!workingCharIds.has(ch.id)) continue
-            if (ch.codeSnippets.length === 0) continue
-            const anchorX = ox + ch.x * zoom
-            const anchorY = containerTop + oy + (ch.y - 10) * zoom
-            const totalDist = anchorY + 24
-            for (let i = 0; i < ch.codeSnippets.length; i++) {
-              const s = ch.codeSnippets[i]
-              const progress = s.age / CODE_SNIPPET_LIFETIME_SEC
-              if (progress <= 0 || progress >= 1) continue
-              const alpha = progress < 0.15 ? progress / 0.15 : progress > 0.88 ? (1 - progress) / 0.12 : 1
-              codeItems.push({
-                key: `${ch.id}-code-${i}-${s.text}`,
-                text: s.text,
-                x: anchorX + s.x * zoom,
-                y: anchorY - progress * totalDist,
-                opacity: Math.max(0, alpha * 0.9),
-              })
-            }
+        }
+        for (const ch of office.getCharacters()) {
+          if (!workingCharIds.has(ch.id)) continue
+          if (ch.codeSnippets.length === 0) continue
+          const anchorX = ox + ch.x * zoom
+          const anchorY = containerTop + oy + (ch.y - 10) * zoom
+          const totalDist = anchorY + 24
+          for (let i = 0; i < ch.codeSnippets.length; i++) {
+            const s = ch.codeSnippets[i]
+            const progress = s.age / CODE_SNIPPET_LIFETIME_SEC
+            if (progress <= 0 || progress >= 1) continue
+            const alpha = progress < 0.15 ? progress / 0.15 : progress > 0.88 ? (1 - progress) / 0.12 : 1
+            codeItems.push({
+              key: `${ch.id}-code-${i}-${s.text}`,
+              text: s.text,
+              x: anchorX + s.x * zoom,
+              y: anchorY - progress * totalDist,
+              opacity: Math.max(0, alpha * 0.9),
+            })
           }
         }
         floatingCommentsRef.current = items
