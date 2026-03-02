@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useI18n, LanguageSwitcher } from "@/lib/i18n";
@@ -49,11 +49,27 @@ export function Sidebar() {
     angle: 0,
     hidden: false,
   });
+  const [manualLogoOffset, setManualLogoOffset] = useState<{ dx: number; dy: number }>({ dx: 0, dy: 0 });
+  const [manualLogoAngle, setManualLogoAngle] = useState(0);
+  const [isLogoDragging, setIsLogoDragging] = useState(false);
+  const bugsEnabledRef = useRef(false);
+  const suppressLogoClickRef = useRef(false);
+  const dragRef = useRef<{ active: boolean; startX: number; startY: number; originDx: number; originDy: number; moved: boolean; lastX: number; lastY: number }>({
+    active: false,
+    startX: 0,
+    startY: 0,
+    originDx: 0,
+    originDy: 0,
+    moved: false,
+    lastX: 0,
+    lastY: 0,
+  });
 
   useEffect(() => {
     const onStart = () => setLogoCarry((s) => ({ ...s, active: true, hidden: false }));
     const onStop = () => setLogoCarry({ active: false, dx: 0, dy: 0, angle: 0, hidden: false });
     const onProgress = (e: Event) => {
+      if (dragRef.current.active) return;
       const ce = e as CustomEvent<{ active: boolean; dx: number; dy: number; angle: number; hidden: boolean }>;
       const d = ce.detail;
       if (!d) return;
@@ -74,6 +90,7 @@ export function Sidebar() {
       const enabled = localStorage.getItem(BUGS_ENABLED_KEY) === "true";
       const raw = Number(localStorage.getItem(BUGS_COUNT_KEY) || "5");
       const count = Math.max(0, Math.min(BUGS_MAX, Number.isFinite(raw) ? raw : 5));
+      bugsEnabledRef.current = enabled;
       setBugsEnabled(enabled);
       setBugsCount(count);
     };
@@ -100,6 +117,73 @@ export function Sidebar() {
     window.dispatchEvent(new CustomEvent("openclaw-bugs-config-change"));
   };
 
+  useEffect(() => {
+    const stopDrag = () => {
+      if (!dragRef.current.active) return;
+      dragRef.current.active = false;
+      if (dragRef.current.moved) suppressLogoClickRef.current = true;
+      setIsLogoDragging(false);
+      document.body.style.userSelect = "";
+    };
+    const onMouseMove = (e: MouseEvent) => {
+      if (!dragRef.current.active) return;
+      const nextDx = dragRef.current.originDx + (e.clientX - dragRef.current.startX);
+      const nextDy = dragRef.current.originDy + (e.clientY - dragRef.current.startY);
+      if (Math.abs(nextDx - dragRef.current.originDx) > 3 || Math.abs(nextDy - dragRef.current.originDy) > 3) {
+        dragRef.current.moved = true;
+      }
+      const moveX = e.clientX - dragRef.current.lastX;
+      const moveY = e.clientY - dragRef.current.lastY;
+      if (Math.abs(moveX) + Math.abs(moveY) > 0.2) {
+        const targetAngle = Math.max(-0.95, Math.min(0.95, Math.atan2(moveY, moveX) * 0.65));
+        setManualLogoAngle((prev) => prev * 0.65 + targetAngle * 0.35);
+      }
+      dragRef.current.lastX = e.clientX;
+      dragRef.current.lastY = e.clientY;
+      setManualLogoOffset({ dx: nextDx, dy: nextDy });
+    };
+    const onMouseUp = () => stopDrag();
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      document.body.style.userSelect = "";
+    };
+  }, []);
+
+  const handleLogoMouseDown = (e: React.MouseEvent<HTMLSpanElement>) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragRef.current = {
+      active: true,
+      startX: e.clientX,
+      startY: e.clientY,
+      originDx: manualLogoOffset.dx,
+      originDy: manualLogoOffset.dy,
+      moved: false,
+      lastX: e.clientX,
+      lastY: e.clientY,
+    };
+    setIsLogoDragging(true);
+    document.body.style.userSelect = "none";
+  };
+
+  const handleLogoClickCapture = (e: React.MouseEvent<HTMLElement>) => {
+    if (!suppressLogoClickRef.current) return;
+    suppressLogoClickRef.current = false;
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleLogoNativeDragStart = (e: React.DragEvent<HTMLElement>) => {
+    e.preventDefault();
+  };
+
+  const logoTransform = `translate(${manualLogoOffset.dx + logoCarry.dx}px, ${manualLogoOffset.dy + logoCarry.dy}px) rotate(${logoCarry.angle + manualLogoAngle}rad)`;
+  const logoCursor = isLogoDragging ? "grabbing" : "grab";
+
   return (
     <>
       <aside
@@ -110,14 +194,18 @@ export function Sidebar() {
         <div className="border-b border-[var(--border)]" style={{ padding: collapsed ? "16px 0" : "16px 20px" }}>
           {collapsed ? (
             <div className="flex flex-col items-center gap-2">
-              <Link href="/">
+              <Link href="/" onClickCapture={handleLogoClickCapture} onDragStart={handleLogoNativeDragStart} draggable={false}>
                 <span
                   className="relative inline-block transition-opacity duration-300"
+                  onMouseDown={handleLogoMouseDown}
+                  onDragStart={handleLogoNativeDragStart}
+                  draggable={false}
                   style={{
                     fontSize: "4.219rem",
                     lineHeight: 1,
-                    transform: `translate(${logoCarry.dx}px, ${logoCarry.dy}px) rotate(${logoCarry.angle}rad)`,
+                    transform: logoTransform,
                     opacity: logoCarry.hidden ? 0 : 1,
+                    cursor: logoCursor,
                   }}
                 >
                   🦞
@@ -134,14 +222,24 @@ export function Sidebar() {
           ) : (
             <div>
               <div className="flex items-center justify-between">
-                <Link href="/" className="flex items-center gap-2">
+                <Link
+                  href="/"
+                  className="flex items-center gap-2"
+                  onClickCapture={handleLogoClickCapture}
+                  onDragStart={handleLogoNativeDragStart}
+                  draggable={false}
+                >
                   <span
                     className="relative inline-block transition-opacity duration-300"
+                    onMouseDown={handleLogoMouseDown}
+                    onDragStart={handleLogoNativeDragStart}
+                    draggable={false}
                     style={{
                       fontSize: "4.219rem",
                       lineHeight: 1,
-                      transform: `translate(${logoCarry.dx}px, ${logoCarry.dy}px) rotate(${logoCarry.angle}rad)`,
+                      transform: logoTransform,
                       opacity: logoCarry.hidden ? 0 : 1,
+                      cursor: logoCursor,
                     }}
                   >
                     🦞
