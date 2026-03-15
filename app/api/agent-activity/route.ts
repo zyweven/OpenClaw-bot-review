@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
 import { promises as fs, existsSync } from 'fs'
 import path from 'path'
-import { parseJsonText } from '@/lib/json'
-import { OPENCLAW_AGENTS_DIR, OPENCLAW_CONFIG_PATH, OPENCLAW_HOME } from '@/lib/openclaw-paths'
+import os from 'os'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -14,22 +13,6 @@ const SUBAGENT_ACTIVITY_EVENT_LIMIT = 6
 const SUBAGENT_ACTIVITY_TEXT_MAX_LEN = 80
 
 type SessionsIndex = Record<string, { sessionId?: string; updatedAt?: number }>
-type CronStoreJob = {
-  id: string
-  agentId?: string
-  sessionKey?: string
-  name?: string
-  enabled?: boolean
-  payload?: { kind?: string; message?: string; text?: string }
-  state?: {
-    nextRunAtMs?: number
-    lastRunAtMs?: number
-    lastDurationMs?: number
-    lastStatus?: string
-    lastError?: string
-    consecutiveErrors?: number
-  }
-}
 
 export interface SubagentActivityEvent {
   key: string
@@ -45,19 +28,6 @@ export interface SubagentInfo {
   activityEvents?: SubagentActivityEvent[]
 }
 
-export interface CronJobInfo {
-  key: string
-  jobId: string
-  label: string
-  isRunning: boolean
-  lastRunAt: number
-  nextRunAt?: number
-  durationMs?: number
-  lastStatus: 'success' | 'running' | 'failed'
-  lastSummary?: string
-  consecutiveFailures: number
-}
-
 export interface AgentActivity {
   agentId: string
   name: string
@@ -67,31 +37,6 @@ export interface AgentActivity {
   toolStatus?: string
   lastActive: number
   subagents?: SubagentInfo[]
-  cronJobs?: CronJobInfo[]
-}
-
-type AgentConfigEntry = {
-  id: string
-  name?: string
-  emoji?: string
-  identity?: { emoji?: string }
-}
-
-async function loadAgentList(config: any, agentsDir: string): Promise<AgentConfigEntry[]> {
-  const configured = Array.isArray(config?.agents?.list)
-    ? config.agents.list.filter((agent: any) => agent && typeof agent.id === 'string' && agent.id)
-    : []
-  if (configured.length > 0) return configured
-
-  try {
-    if (!existsSync(agentsDir)) return []
-    const dirs = await fs.readdir(agentsDir, { withFileTypes: true })
-    return dirs
-      .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
-      .map((entry) => ({ id: entry.name }))
-  } catch {
-    return []
-  }
 }
 
 function isSubtaskDescription(desc: string): boolean {
@@ -155,185 +100,6 @@ function normalizeActivityText(raw: unknown): string | null {
   return compact.length > SUBAGENT_ACTIVITY_TEXT_MAX_LEN
     ? `${compact.slice(0, SUBAGENT_ACTIVITY_TEXT_MAX_LEN - 1)}…`
     : compact
-}
-
-function normalizeCronLabel(raw: unknown, fallbackKey: string): string {
-  if (typeof raw === 'string' && raw.trim()) {
-    return raw.replace(/^Cron:\s*/i, '').trim() || fallbackKey
-  }
-  return fallbackKey
-}
-
-function truncateSummary(raw: string, maxLen = 120): string {
-  const compact = raw.replace(/\s+/g, ' ').trim()
-  if (!compact) return ''
-  return compact.length > maxLen ? `${compact.slice(0, maxLen - 1)}…` : compact
-}
-
-function resolveCronStorePath(config: any): string {
-  const raw = typeof config?.cron?.store === 'string' ? config.cron.store.trim() : ''
-  if (!raw) return path.join(OPENCLAW_HOME, 'cron', 'jobs.json')
-  if (raw.startsWith('~')) return path.join(process.env.HOME || '', raw.slice(1))
-  return path.resolve(raw)
-}
-
-async function loadCronJobs(config: any): Promise<CronStoreJob[]> {
-  const storePath = resolveCronStorePath(config)
-  if (!existsSync(storePath)) return []
-  try {
-    const raw = await fs.readFile(storePath, 'utf8')
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed?.jobs) ? parsed.jobs.filter(Boolean) : []
-  } catch {
-    return []
-  }
-}
-
-function inferCronOwnerAgentId(job: CronStoreJob): string {
-  if (typeof job.agentId === 'string' && job.agentId.trim()) return job.agentId.trim()
-  if (typeof job.sessionKey === 'string' && job.sessionKey.startsWith('agent:')) {
-    const parts = job.sessionKey.split(':')
-    if (parts[1]?.trim()) return parts[1].trim()
-  }
-  return 'main'
-}
-
-function deriveCronSummaryFromJob(job: CronStoreJob): string | undefined {
-  const lastError = typeof job.state?.lastError === 'string' ? truncateSummary(job.state.lastError) : ''
-  if (lastError) return lastError
-  const payloadText =
-    typeof job.payload?.message === 'string'
-      ? job.payload.message
-      : typeof job.payload?.text === 'string'
-        ? job.payload.text
-        : ''
-  return payloadText ? truncateSummary(payloadText) : undefined
-}
-
-function mapCronStatus(status: string | undefined): 'success' | 'running' | 'failed' {
-  const normalized = (status || '').trim().toLowerCase()
-  if (normalized === 'error' || normalized === 'failed') return 'failed'
-  if (normalized === 'running') return 'running'
-  return 'success'
-}
-
-function inferCronStatusFromTranscript(lines: string[], updatedAt: number): {
-  isRunning: boolean
-  lastStatus: 'success' | 'running' | 'failed'
-  lastSummary?: string
-  durationMs?: number
-} {
-  let lastAssistantText: string | undefined
-  let lastAssistantError: string | undefined
-  let lastToolError: string | undefined
-  let lastToolText: string | undefined
-  let sawTerminalAssistant = false
-  let sawToolUseWithoutResult = false
-  let firstAt = 0
-  let lastAt = 0
-
-  for (const line of lines) {
-    let record: any
-    try {
-      record = JSON.parse(line)
-    } catch {
-      continue
-    }
-    const msg = record?.message
-    if (!msg || typeof msg !== 'object') continue
-    const at = parseRecordTimestamp(record)
-    if (at > 0 && (firstAt === 0 || at < firstAt)) firstAt = at
-    if (at > lastAt) lastAt = at
-
-    if (record.type === 'message') {
-      const role = typeof msg.role === 'string' ? msg.role : ''
-      const blocks = Array.isArray(msg.content) ? msg.content : []
-
-      if (role === 'assistant') {
-        for (const block of blocks) {
-          if (!block || typeof block !== 'object') continue
-          const b = block as Record<string, unknown>
-          if ((b.type === 'toolCall' || b.type === 'tool_use') && typeof b.name === 'string') {
-            sawToolUseWithoutResult = true
-          }
-          if (b.type === 'text' && typeof b.text === 'string' && b.text.trim()) {
-            lastAssistantText = truncateSummary(b.text)
-          }
-        }
-        if (typeof msg.errorMessage === 'string' && msg.errorMessage.trim()) {
-          lastAssistantError = truncateSummary(msg.errorMessage)
-        }
-        const stopReason = typeof msg.stopReason === 'string' ? msg.stopReason : ''
-        if (stopReason === 'stop' || stopReason === 'error') {
-          sawTerminalAssistant = true
-        }
-      }
-
-      if (role === 'toolResult') {
-        const details = isPlainObject(msg.details) ? msg.details : null
-        const status = typeof details?.status === 'string' ? details.status : ''
-        if (status.toLowerCase() === 'error' || msg.isError === true) {
-          const detailError =
-            typeof details?.error === 'string' && details.error.trim()
-              ? details.error
-              : typeof details?.aggregated === 'string' && details.aggregated.trim()
-                ? details.aggregated
-                : ''
-          if (detailError) lastToolError = truncateSummary(detailError)
-        } else {
-          const detailText =
-            typeof details?.aggregated === 'string' && details.aggregated.trim()
-              ? details.aggregated
-              : Array.isArray(msg.content)
-                ? msg.content
-                    .map((block: any) => (block?.type === 'text' && typeof block.text === 'string') ? block.text : '')
-                    .join(' ')
-                : ''
-          if (detailText.trim()) lastToolText = truncateSummary(detailText)
-        }
-        sawToolUseWithoutResult = false
-      }
-    }
-  }
-
-  if (lastAssistantError || lastToolError) {
-    return {
-      isRunning: false,
-      lastStatus: 'failed',
-      lastSummary: lastAssistantError || lastToolError,
-      durationMs: firstAt > 0 && lastAt >= firstAt ? lastAt - firstAt : undefined,
-    }
-  }
-
-  if (sawTerminalAssistant && lastAssistantText) {
-    return {
-      isRunning: false,
-      lastStatus: 'success',
-      lastSummary: lastAssistantText,
-      durationMs: firstAt > 0 && lastAt >= firstAt ? lastAt - firstAt : undefined,
-    }
-  }
-
-  const recentlyUpdated = updatedAt > 0 && Date.now() - updatedAt <= 2 * 60 * 1000
-  if (sawToolUseWithoutResult || recentlyUpdated) {
-    return {
-      isRunning: true,
-      lastStatus: 'running',
-      lastSummary: lastAssistantText || lastToolText,
-      durationMs: firstAt > 0 ? Math.max(0, Date.now() - firstAt) : undefined,
-    }
-  }
-
-  return {
-    isRunning: false,
-    lastStatus: lastToolText ? 'success' : 'running',
-    lastSummary: lastAssistantText || lastToolText,
-    durationMs: firstAt > 0 && lastAt >= firstAt ? lastAt - firstAt : undefined,
-  }
-}
-
-function isPlainObject(value: unknown): value is Record<string, any> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function extractChildSessionKeyFromPayload(payload: unknown): string | null {
@@ -716,73 +482,28 @@ async function parseSubagents(agentSessionsDir: string, agentId: string): Promis
   return allSubagents
 }
 
-async function parseCronJobs(agentSessionsDir: string, cronJobsForAgent: CronStoreJob[]): Promise<CronJobInfo[]> {
-  if (cronJobsForAgent.length === 0) return []
-
-  const sessionsIndexPath = path.join(agentSessionsDir, 'sessions.json')
-  const sessionsIndex = existsSync(sessionsIndexPath)
-    ? JSON.parse(await fs.readFile(sessionsIndexPath, 'utf8')) as Record<string, any>
-    : {}
-
-  const cronJobs: CronJobInfo[] = []
-
-  for (const job of cronJobsForAgent) {
-    const entries = Object.entries(sessionsIndex)
-      .filter(([sessionKey, meta]) => sessionKey.includes(`:cron:${job.id}`) && meta && typeof (meta as any).sessionId === 'string')
-      .map(([sessionKey, meta]) => ({
-        sessionKey,
-        sessionId: (meta as any).sessionId as string,
-        updatedAt: typeof (meta as any).updatedAt === 'number' ? (meta as any).updatedAt : 0,
-        label: typeof (meta as any).label === 'string' ? (meta as any).label : undefined,
-      }))
-      .sort((a, b) => b.updatedAt - a.updatedAt)
-
-    const latest = entries[0]
-    let transcriptStatus: ReturnType<typeof inferCronStatusFromTranscript> | null = null
-
-    if (latest) {
-      const transcriptPath = path.join(agentSessionsDir, `${latest.sessionId}.jsonl`)
-      if (existsSync(transcriptPath)) {
-        const transcript = await fs.readFile(transcriptPath, 'utf8')
-        transcriptStatus = inferCronStatusFromTranscript(transcript.split('\n').filter((line) => line.trim()), latest.updatedAt)
-      }
-    }
-
-    const fallbackLabel = latest?.sessionKey?.split(':cron:')[1] || job.id
-    const state = job.state || {}
-    cronJobs.push({
-      key: latest?.sessionKey?.includes(':run:') ? latest.sessionKey.split(':run:')[0] : latest?.sessionKey || `agent:${inferCronOwnerAgentId(job)}:cron:${job.id}`,
-      jobId: job.id,
-      label: normalizeCronLabel(job.name || latest?.label, fallbackLabel),
-      isRunning: transcriptStatus?.isRunning || mapCronStatus(state.lastStatus) === 'running',
-      lastRunAt: typeof state.lastRunAtMs === 'number' ? state.lastRunAtMs : latest?.updatedAt || 0,
-      nextRunAt: typeof state.nextRunAtMs === 'number' ? state.nextRunAtMs : undefined,
-      durationMs: typeof state.lastDurationMs === 'number' ? state.lastDurationMs : transcriptStatus?.durationMs,
-      lastStatus: transcriptStatus?.lastStatus || mapCronStatus(state.lastStatus),
-      lastSummary: transcriptStatus?.lastSummary || deriveCronSummaryFromJob(job),
-      consecutiveFailures: typeof state.consecutiveErrors === 'number' ? state.consecutiveErrors : 0,
-    })
-  }
-
-  cronJobs.sort((a, b) => b.lastRunAt - a.lastRunAt)
-  return cronJobs
-}
-
 export async function GET() {
-  const configPath = OPENCLAW_CONFIG_PATH
-  const agentsDir = OPENCLAW_AGENTS_DIR
+  const openclawDir = path.join(os.homedir(), '.openclaw')
+  const configPath = path.join(openclawDir, 'openclaw.json')
+  const agentsDir = path.join(openclawDir, 'agents')
 
   const agents: AgentActivity[] = []
 
   try {
     if (existsSync(configPath)) {
       const configContent = await fs.readFile(configPath, 'utf8')
-      const config = parseJsonText(configContent)
+      const config = JSON.parse(configContent)
 
-      const agentList = await loadAgentList(config, agentsDir)
-      if (agentList.length > 0) {
+      let agentList = Array.isArray(config.agents) ? config.agents : config.agents?.list || []
+      // Auto-discover agents from ~/.openclaw/agents/ when list is empty
+      if (agentList.length === 0 && existsSync(agentsDir)) {
+        try {
+          const dirs = await fs.readdir(agentsDir, { withFileTypes: true })
+          agentList = dirs.filter(d => d.isDirectory() && !d.name.startsWith('.')).map(d => ({ id: d.name }))
+        } catch {}
+      }
+      if (agentList && Array.isArray(agentList)) {
         const now = Date.now()
-        const liveCronJobs = await loadCronJobs(config)
 
         for (const agent of agentList) {
           let lastActive = 0
@@ -818,25 +539,45 @@ export async function GET() {
 
           // Parse subagents for online agents
           let subagents: SubagentInfo[] | undefined
-          let cronJobs: CronJobInfo[] | undefined
           if (state !== 'offline' && agentSessionsDir && existsSync(agentSessionsDir)) {
             subagents = await parseSubagents(agentSessionsDir, agent.id)
             if (subagents.length === 0) subagents = undefined
-            cronJobs = await parseCronJobs(
-              agentSessionsDir,
-              liveCronJobs.filter((job) => inferCronOwnerAgentId(job) === agent.id),
-            )
-            if (cronJobs.length === 0) cronJobs = undefined
           }
+
+          // Read agent name and emoji from IDENTITY.md
+          async function readIdentity(agentId: string): Promise<{ name: string | null; emoji: string | null }> {
+            const candidates = [
+              path.join(openclawDir, 'workspace/IDENTITY.md'),
+              path.join(openclawDir, `agents/${agentId}/agent/IDENTITY.md`),
+              path.join(openclawDir, `workspace-${agentId}/IDENTITY.md`),
+            ].filter(Boolean) as string[]
+            for (const p of candidates) {
+              try {
+                const content = await fs.readFile(p, 'utf8')
+                const nameMatch = content.match(/\*\*Name:\*\*\s*(.+)/)
+                const emojiMatch = content.match(/\*\*Emoji:\*\*\s*(.+)/)
+                const name = nameMatch?.[1]?.trim()
+                const emoji = emojiMatch?.[1]?.trim()
+                if (name || emoji) {
+                  return {
+                    name: name && !name.startsWith('_') && !name.startsWith('(') ? name : null,
+                    emoji: emoji || null,
+                  }
+                }
+              } catch {}
+            }
+            return { name: null, emoji: null }
+          }
+
+          const identity = await readIdentity(agent.id)
 
           agents.push({
             agentId: agent.id,
-            name: agent.name || agent.id,
-            emoji: agent.identity?.emoji || agent.emoji || '🤖',
+            name: identity.name || agent.name || agent.id,
+            emoji: identity.emoji || agent.identity?.emoji || agent.emoji || '🤖',
             state,
             lastActive,
             subagents,
-            cronJobs,
           })
         }
       }
