@@ -10,7 +10,7 @@ const BUGS_ENABLED_KEY = "pixel-office-bugs-enabled";
 const BUGS_COUNT_KEY = "pixel-office-bugs-count";
 const BUGS_MAX = 400;
 
-type NavIconName = "agents" | "pixelOffice" | "models" | "sessions" | "stats" | "alerts" | "skills";
+type NavIconName = "agents" | "pixelOffice" | "models" | "sessions" | "stats" | "alerts" | "skills" | "memory";
 type PixelTone = "base" | "shade" | "light";
 type PixelRect = { x: number; y: number; w?: number; h?: number; tone?: PixelTone; opacity?: number };
 type PixelPalette = { base: string; shade: string; light: string };
@@ -176,6 +176,23 @@ function NavPixelIcon({ name, active }: { name: NavIconName; active: boolean }) 
           ]}
         />
       );
+    case "memory":
+      return (
+        <PixelSvg
+          className={baseClass}
+          palette={palette}
+          pixels={[
+            { x: 3, y: 2, w: 10, h: 1, tone: "light" },
+            { x: 2, y: 3, w: 12, h: 1, tone: "base" },
+            { x: 2, y: 4, w: 12, h: 8, tone: "shade" },
+            { x: 3, y: 12, w: 10, h: 1, tone: "base" },
+            { x: 5, y: 13, w: 6, h: 1, tone: "light" },
+            { x: 4, y: 6, w: 8, h: 1, tone: "light", opacity: 0.6 },
+            { x: 4, y: 8, w: 6, h: 1, tone: "light", opacity: 0.6 },
+            { x: 4, y: 10, w: 4, h: 1, tone: "light", opacity: 0.6 },
+          ]}
+        />
+      );
   }
 }
 
@@ -220,6 +237,7 @@ const NAV_ITEMS: { group: string; items: { href: string; icon: NavIconName; labe
     group: "nav.config",
     items: [
       { href: "/skills", icon: "skills", labelKey: "nav.skills" },
+      { href: "/memory", icon: "memory", labelKey: "nav.memory" },
     ],
   },
 ];

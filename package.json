@@ -8,6 +8,8 @@
     "start": "next start"
   },
   "dependencies": {
+    "@lancedb/lancedb": "^0.26.2",
+    "@lancedb/lancedb-darwin-x64": "^0.22.3",
     "@tailwindcss/postcss": "^4.0.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
